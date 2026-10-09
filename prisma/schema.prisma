@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  eleve
+  admin
+}
+
+enum TypeSujet {
+  devoir
+  exercice
+  examen
+  interrogation
+  concours
+  autre
+}
+
+model Utilisateur {
+  id            Int      @id @default(autoincrement())
+  nom           String
+  prenom        String
+  email         String   @unique
+  motDePasse    String // toujours hashé, jamais en clair
+  role          Role     @default(eleve)
+  niveau        String? // classe ou niveau d'études, en texte libre (ex : "Terminale D", "Licence 2")
+  etablissement String?
+  dateCreation  DateTime @default(now())
+
+  sujets Sujet[]
+}
+
+model Sujet {
+  id              Int       @id @default(autoincrement())
+  titre           String
+  description     String?
+  type            TypeSujet
+  matiere         String // texte libre (ex : "Mathématiques", "Droit civil")
+  niveau          String // texte libre (ex : "Terminale", "Licence 1")
+  annee           Int
+  fichier         String // nom du fichier dans le dossier backend/fichiers
+  telechargements Int       @default(0)
+  dateCreation    DateTime  @default(now())
+
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id])
+  utilisateurId Int
+}

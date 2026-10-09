@@ -1,0 +1,4 @@
+node_modules
+.env
+# Fichiers déposés par les utilisateurs
+fichiers/
