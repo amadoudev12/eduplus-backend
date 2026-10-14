@@ -5,8 +5,9 @@ import cookieParser from "cookie-parser"
 import routesAuth from "./routes/auth.js"
 import routesSujets from "./routes/sujets.js"
 
-if (!process.env.DATABASE_URL || !process.env.JWT_SECRET || !process.env.CLOUDINARY_URL) {
-    console.error("Il manque DATABASE_URL, JWT_SECRET ou CLOUDINARY_URL dans le fichier backend/.env")
+const variablesManquantes = ["DATABASE_URL", "JWT_SECRET", "CLOUDINARY_URL"].filter((nom) => !process.env[nom])
+if (variablesManquantes.length > 0) {
+    console.error(`Variable(s) d'environnement manquante(s) : ${variablesManquantes.join(", ")} (en local : fichier .env, en ligne : onglet Environment de Render)`)
     process.exit(1)
 }
 
@@ -55,5 +56,5 @@ app.use((erreur, req, res, next) => {
 })
 
 app.listen(PORT, () => {
-    console.log(`Backend EduPlus démarré sur http://localhost:${PORT}`)
+    console.log(`Backend EduPlus démarré`)
 })
