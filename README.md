@@ -44,7 +44,8 @@ Le site se lance à part, depuis le dépôt du frontend (`npm run dev`, sur http
 1. Créer une base PostgreSQL en ligne (par exemple sur [Neon](https://neon.tech)) et copier son adresse de connexion.
 2. Sur Render : **New > Blueprint**, choisir ce dépôt. Le fichier `render.yaml` configure le service.
 3. Remplir les variables demandées :
-   - `DATABASE_URL` : l'adresse de la base créée à l'étape 1
+   - `DATABASE_URL` : l'adresse de la base créée à l'étape 1. Sur Supabase : le pooler en mode transaction (port 6543), suivi de `?pgbouncer=true&connection_limit=1`
+   - `DIRECT_URL` : l'adresse utilisée par les migrations. Sur Supabase : le pooler en mode session (même adresse, port 5432, sans paramètres). Ailleurs : la même valeur que `DATABASE_URL`
    - `CLOUDINARY_URL` : la même valeur que dans `.env`
    - `FRONTEND_URL` : l'adresse du site sur Vercel
 4. Noter l'adresse du service (du type `https://eduplus-backend.onrender.com`) et la donner au frontend dans sa variable `BACKEND_URL`.

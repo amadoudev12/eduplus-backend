@@ -16,6 +16,9 @@ services:
       # À remplir à la main dans le tableau de bord Render
       - key: DATABASE_URL
         sync: false
+      # Connexion directe pour les migrations (sur Supabase : le pooler en mode session, port 5432)
+      - key: DIRECT_URL
+        sync: false
       - key: CLOUDINARY_URL
         sync: false
       - key: FRONTEND_URL
