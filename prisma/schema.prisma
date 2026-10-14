@@ -28,7 +28,7 @@ model Utilisateur {
   email         String   @unique
   motDePasse    String // toujours hashé, jamais en clair
   role          Role     @default(eleve)
-  niveau        String? // classe ou niveau d'études, en texte libre (ex : "Terminale D", "Licence 2")
+  niveau        String? // classe ou niveau d'études, en texte libre (ex : "Licence 2", "Master 1")
   etablissement String?
   dateCreation  DateTime @default(now())
 
@@ -40,10 +40,10 @@ model Sujet {
   titre           String
   description     String?
   type            TypeSujet
-  matiere         String // texte libre (ex : "Mathématiques", "Droit civil")
-  niveau          String // texte libre (ex : "Terminale", "Licence 1")
+  matiere         String // texte libre (ex : "Algorithmique", "Droit civil")
+  niveau          String // texte libre (ex : "Licence 1", "Master 2")
   annee           Int
-  fichier         String // nom du fichier dans le dossier backend/fichiers
+  fichier         String // identifiant du fichier sur Cloudinary
   telechargements Int       @default(0)
   dateCreation    DateTime  @default(now())
 

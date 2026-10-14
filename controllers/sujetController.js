@@ -1,7 +1,10 @@
-import fs from "fs"
 import path from "path"
+import { Readable } from "stream"
+import { pipeline } from "stream/promises"
 import { prisma } from "../utils/prisma.js"
-import { DOSSIER_FICHIERS, supprimerFichier } from "../middlewares/envoiFichier.js"
+import { contenuCorrespondExtension, nomOriginal } from "../middlewares/envoiFichier.js"
+import { envoyerSurCloudinary, adresseFichier, supprimerDeCloudinary } from "../utils/cloudinary.js"
+import { verifierCoherence } from "../utils/coherenceSujet.js"
 
 const TYPES_SUJET = ["devoir", "exercice", "examen", "interrogation", "concours", "autre"]
 const ANNEE_MIN = 1990
@@ -23,7 +26,7 @@ export async function listerSujets(req, res) {
             { description: { contains: texte, mode: "insensitive" } },
         ]
     }
-    // Matière et niveau sont du texte libre : "math" trouve aussi "Mathématiques"
+    // Matière et niveau sont du texte libre : "algo" trouve aussi "Algorithmique"
     if (matiere) filtres.matiere = { contains: String(matiere).trim(), mode: "insensitive" }
     if (niveau) filtres.niveau = { contains: String(niveau).trim(), mode: "insensitive" }
     if (annee) filtres.annee = Number(annee)
@@ -67,7 +70,8 @@ function verifierSujet(sujet, fichier) {
         return `L'année doit être comprise entre ${ANNEE_MIN} et ${anneeActuelle}.`
     }
     if (!fichier) return "Le fichier du sujet est obligatoire."
-    return null
+    if (!contenuCorrespondExtension(fichier)) return "Fichier invalide : son contenu ne correspond pas à un fichier PDF, DOC ou DOCX."
+    return verifierCoherence(sujet, nomOriginal(fichier))
 }
 
 export async function creerSujet(req, res) {
@@ -82,29 +86,31 @@ export async function creerSujet(req, res) {
 
     const erreur = verifierSujet(sujet, req.file)
     if (erreur) {
-        // Le fichier a déjà été enregistré par multer : on le retire puisque le sujet est refusé
-        supprimerFichier(req.file?.filename)
         return res.status(400).json({ message: erreur })
     }
+
+    // Le fichier n'est envoyé en ligne qu'une fois toutes les vérifications passées
+    const fichier = await envoyerSurCloudinary(req.file.buffer, req.file.originalname)
 
     try {
         const nouveauSujet = await prisma.sujet.create({
             data: {
                 ...sujet,
                 description: sujet.description || null,
-                fichier: req.file.filename,
+                fichier,
                 utilisateurId: req.utilisateur.id,
             },
             include: AVEC_AUTEUR,
         })
         res.status(201).json(nouveauSujet)
     } catch (erreurBase) {
-        supprimerFichier(req.file.filename)
+        // Le sujet n'a pas pu être enregistré : on retire le fichier déjà envoyé en ligne
+        await supprimerDeCloudinary(fichier).catch(console.error)
         throw erreurBase
     }
 }
 
-// Retrouver un sujet et vérifier que son fichier est bien présent sur le disque.
+// Retrouver un sujet et récupérer son fichier sur Cloudinary.
 // Répond directement en cas de problème et renvoie null.
 async function trouverSujetAvecFichier(req, res) {
     const id = Number(req.params.id)
@@ -113,26 +119,38 @@ async function trouverSujetAvecFichier(req, res) {
         res.status(404).json({ message: "Ce sujet n'existe pas." })
         return null
     }
-    if (!fs.existsSync(path.join(DOSSIER_FICHIERS, sujet.fichier))) {
+
+    const reponse = await fetch(adresseFichier(sujet.fichier))
+    if (!reponse.ok) {
+        console.error(`Cloudinary a répondu ${reponse.status} pour le fichier ${sujet.fichier}`)
         res.status(404).json({ message: "Le fichier de ce sujet est introuvable." })
         return null
     }
-    return sujet
+    return { sujet, reponse }
+}
+
+// Transmettre au navigateur le fichier reçu de Cloudinary
+async function transmettreFichier(reponse, res) {
+    const taille = reponse.headers.get("content-length")
+    if (taille) res.set("Content-Length", taille)
+    res.set("X-Content-Type-Options", "nosniff")
+    await pipeline(Readable.fromWeb(reponse.body), res)
 }
 
 // Afficher le fichier dans le navigateur (bouton « Voir »)
 export async function voirFichier(req, res) {
-    const sujet = await trouverSujetAvecFichier(req, res)
-    if (!sujet) return
+    const trouve = await trouverSujetAvecFichier(req, res)
+    if (!trouve) return
 
-    res.set("X-Content-Type-Options", "nosniff")
-    res.sendFile(path.join(DOSSIER_FICHIERS, sujet.fichier))
+    res.type(path.extname(trouve.sujet.fichier))
+    await transmettreFichier(trouve.reponse, res)
 }
 
 // Télécharger le fichier et compter le téléchargement (bouton « Télécharger »)
 export async function telechargerSujet(req, res) {
-    const sujet = await trouverSujetAvecFichier(req, res)
-    if (!sujet) return
+    const trouve = await trouverSujetAvecFichier(req, res)
+    if (!trouve) return
+    const { sujet, reponse } = trouve
 
     await prisma.sujet.update({
         where: { id: sujet.id },
@@ -141,8 +159,8 @@ export async function telechargerSujet(req, res) {
 
     // Le fichier téléchargé porte le titre du sujet, sans les caractères interdits dans un nom de fichier
     const nomTelechargement = sujet.titre.replace(/[\\/:*?"<>|]/g, "-") + path.extname(sujet.fichier)
-    res.set("X-Content-Type-Options", "nosniff")
-    res.download(path.join(DOSSIER_FICHIERS, sujet.fichier), nomTelechargement)
+    res.attachment(nomTelechargement)
+    await transmettreFichier(reponse, res)
 }
 
 // Seul l'auteur du sujet ou un administrateur peut le supprimer
@@ -159,6 +177,7 @@ export async function supprimerSujet(req, res) {
     }
 
     await prisma.sujet.delete({ where: { id } })
-    supprimerFichier(sujet.fichier)
+    // Le sujet est déjà supprimé : un problème côté Cloudinary ne doit pas faire échouer la demande
+    await supprimerDeCloudinary(sujet.fichier).catch(console.error)
     res.json({ message: "Le sujet a été supprimé." })
 }

@@ -6,19 +6,19 @@ import fs from "fs"
 import path from "path"
 import bcrypt from "bcryptjs"
 import { prisma } from "../utils/prisma.js"
-import { DOSSIER_FICHIERS } from "../middlewares/envoiFichier.js"
+import { envoyerSurCloudinary } from "../utils/cloudinary.js"
 
 const MOT_DE_PASSE_TEST = "motdepasse123"
 
 const sujets = [
-    { titre: "Baccalauréat blanc de mathématiques", description: "Suites numériques, fonctions logarithmes et probabilités.", type: "examen", annee: 2025, matiere: "Mathématiques", niveau: "Terminale" },
-    { titre: "Exercices sur les fractions", description: "Série d'exercices pour s'entraîner à additionner et simplifier des fractions.", type: "exercice", annee: 2024, matiere: "Mathématiques", niveau: "6e" },
-    { titre: "Devoir de thermodynamique", description: "Introduction aux lois de la thermodynamique.", type: "devoir", annee: 2025, matiere: "Physique-Chimie", niveau: "Première" },
-    { titre: "Interrogation sur la cellule", description: "Structure de la cellule animale et végétale.", type: "interrogation", annee: 2023, matiere: "SVT", niveau: "Seconde" },
-    { titre: "Commentaire composé : texte classique", description: "Étude d'un texte classique en profondeur.", type: "devoir", annee: 2024, matiere: "Français", niveau: "Première" },
-    { titre: "BEPC blanc d'anglais", description: "Compréhension de texte et expression écrite.", type: "examen", annee: 2025, matiere: "Anglais", niveau: "3e" },
-    { titre: "Concours d'entrée : épreuve de mathématiques", description: null, type: "concours", annee: 2022, matiere: "Mathématiques", niveau: "Terminale" },
-    { titre: "Partiel d'algèbre linéaire", description: "Matrices et systèmes d'équations linéaires.", type: "examen", annee: 2025, matiere: "Algèbre", niveau: "Licence 1" },
+    { titre: "Partiel d'algèbre linéaire", description: "Matrices, déterminants et systèmes d'équations linéaires.", type: "examen", annee: 2025, matiere: "Algèbre", niveau: "Licence 1" },
+    { titre: "TD d'algorithmique : les tris", description: "Tri par insertion, tri fusion et calcul de complexité.", type: "exercice", annee: 2024, matiere: "Algorithmique", niveau: "Licence 1" },
+    { titre: "Cas pratique sur la responsabilité civile", description: "Responsabilité du fait personnel et du fait des choses.", type: "devoir", annee: 2025, matiere: "Droit civil", niveau: "Licence 2" },
+    { titre: "Interrogation de microéconomie", description: "Théorie du consommateur et élasticités.", type: "interrogation", annee: 2023, matiere: "Microéconomie", niveau: "Licence 1" },
+    { titre: "Examen de bases de données", description: "Modèle relationnel et requêtes SQL.", type: "examen", annee: 2024, matiere: "Bases de données", niveau: "Licence 3" },
+    { titre: "Partiel de thermodynamique", description: "Premier et second principes.", type: "examen", annee: 2025, matiere: "Thermodynamique", niveau: "Licence 2" },
+    { titre: "Concours d'entrée en master : épreuve d'analyse", description: null, type: "concours", annee: 2022, matiere: "Analyse", niveau: "Master 1" },
+    { titre: "Devoir de droit constitutionnel", description: "Commentaire d'un article de la Constitution.", type: "devoir", annee: 2025, matiere: "Droit constitutionnel", niveau: "Licence 1" },
 ]
 
 async function remplirLaBase() {
@@ -27,7 +27,7 @@ async function remplirLaBase() {
     await prisma.utilisateur.createMany({
         data: [
             { nom: "Test", prenom: "Admin", email: "admin@eduplus.dev", motDePasse, role: "admin" },
-            { nom: "Test", prenom: "Élève", email: "eleve@eduplus.dev", motDePasse, niveau: "Terminale", etablissement: "Lycée de test" },
+            { nom: "Test", prenom: "Étudiant", email: "eleve@eduplus.dev", motDePasse, niveau: "Licence 2", etablissement: "Université de test" },
         ],
         skipDuplicates: true,
     })
@@ -40,10 +40,11 @@ async function remplirLaBase() {
 
     const eleve = await prisma.utilisateur.findUnique({ where: { email: "eleve@eduplus.dev" } })
 
-    for (const [numero, sujet] of sujets.entries()) {
-        // Chaque sujet fictif reçoit sa propre copie du PDF d'exemple
-        const fichier = `exemple-${numero + 1}.pdf`
-        fs.copyFileSync(path.join(import.meta.dirname, "sujet-exemple.pdf"), path.join(DOSSIER_FICHIERS, fichier))
+    const pdfExemple = fs.readFileSync(path.join(import.meta.dirname, "sujet-exemple.pdf"))
+
+    for (const sujet of sujets) {
+        // Chaque sujet fictif reçoit sa propre copie du PDF d'exemple sur Cloudinary
+        const fichier = await envoyerSurCloudinary(pdfExemple, "sujet-exemple.pdf")
 
         await prisma.sujet.create({
             data: {

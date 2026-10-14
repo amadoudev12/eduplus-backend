@@ -1,23 +1,15 @@
-import fs from "fs"
 import path from "path"
-import crypto from "crypto"
 import multer from "multer"
 
-// Dossier où sont enregistrés les fichiers des sujets
-export const DOSSIER_FICHIERS = path.join(import.meta.dirname, "..", "fichiers")
-fs.mkdirSync(DOSSIER_FICHIERS, { recursive: true })
-
 const EXTENSIONS_AUTORISEES = [".pdf", ".doc", ".docx"]
-const TAILLE_MAX = 10 * 1024 * 1024 // 10 Mo
+const TAILLE_MAX = 5 * 1024 * 1024 // 5 Mo
 
-const stockage = multer.diskStorage({
-    destination: DOSSIER_FICHIERS,
-    // On donne un nom unique au fichier pour ne jamais écraser celui d'un autre sujet
-    filename: (req, file, cb) => {
-        const extension = path.extname(file.originalname).toLowerCase()
-        cb(null, Date.now() + "-" + crypto.randomBytes(6).toString("hex") + extension)
-    },
-})
+// Premiers octets attendus au début du fichier, pour refuser un fichier renommé (ex : une image en .pdf)
+const SIGNATURES = {
+    ".pdf": [0x25, 0x50, 0x44, 0x46], // %PDF
+    ".doc": [0xd0, 0xcf, 0x11, 0xe0],
+    ".docx": [0x50, 0x4b, 0x03, 0x04],
+}
 
 function filtrerFichier(req, file, cb) {
     const extension = path.extname(file.originalname).toLowerCase()
@@ -29,14 +21,21 @@ function filtrerFichier(req, file, cb) {
     cb(null, true)
 }
 
-// Reçoit un seul fichier envoyé dans le champ "fichier" du formulaire
+// Reçoit un seul fichier envoyé dans le champ "fichier" du formulaire.
+// Il est gardé en mémoire (req.file.buffer) le temps d'être envoyé sur Cloudinary
 export const envoiFichier = multer({
-    storage: stockage,
+    storage: multer.memoryStorage(),
     fileFilter: filtrerFichier,
     limits: { fileSize: TAILLE_MAX },
 }).single("fichier")
 
-export function supprimerFichier(nomFichier) {
-    if (!nomFichier) return
-    fs.rmSync(path.join(DOSSIER_FICHIERS, nomFichier), { force: true })
+// Vérifier que le contenu du fichier correspond bien à son extension
+export function contenuCorrespondExtension(fichier) {
+    const signature = SIGNATURES[path.extname(fichier.originalname).toLowerCase()]
+    return Boolean(signature) && signature.every((octet, position) => fichier.buffer[position] === octet)
+}
+
+// multer lit le nom du fichier en latin1 : on le remet en UTF-8 pour retrouver les accents
+export function nomOriginal(fichier) {
+    return Buffer.from(fichier.originalname, "latin1").toString("utf8")
 }
