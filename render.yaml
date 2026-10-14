@@ -4,8 +4,8 @@ services:
     name: eduplus-backend
     runtime: node
     plan: free
-    # Les migrations créent ou mettent à jour les tables à chaque déploiement
-    buildCommand: npm install && npx prisma migrate deploy
+    buildCommand: npm install
+    # « npm start » applique d'abord les migrations (prisma migrate deploy), puis lance le serveur
     startCommand: npm start
     envVars:
       - key: NODE_ENV

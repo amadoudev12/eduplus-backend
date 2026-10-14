@@ -49,7 +49,8 @@ Le site se lance à part, depuis le dépôt du frontend (`npm run dev`, sur http
    - `FRONTEND_URL` : l'adresse du site sur Vercel
 4. Noter l'adresse du service (du type `https://eduplus-backend.onrender.com`) et la donner au frontend dans sa variable `BACKEND_URL`.
 
-Les tables sont créées automatiquement à chaque déploiement (`prisma migrate deploy`).
+Les tables sont créées automatiquement au démarrage du serveur : `npm start` lance `prisma migrate deploy` avant `node server.js`.
+Si le service a été créé à la main (sans Blueprint), vérifier dans **Settings** que la *Start Command* est bien `npm start`.
 
 ## Organisation
 
